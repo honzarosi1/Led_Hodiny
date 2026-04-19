@@ -17,29 +17,55 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Detect frontend directory
+        id: detect
+        shell: bash
+        run: |
+          if [ -f "frontend/package.json" ]; then
+            echo "dir=frontend" >> "$GITHUB_OUTPUT"
+            echo "Found frontend/package.json"
+          elif [ -f "package.json" ]; then
+            echo "dir=." >> "$GITHUB_OUTPUT"
+            echo "Found package.json in repo root"
+          else
+            echo "ERROR: No package.json found at root or in frontend/"
+            ls -la
+            exit 1
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "yarn"
-          cache-dependency-path: frontend/yarn.lock
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        working-directory: ${{ steps.detect.outputs.dir }}
+        run: |
+          if [ -f "yarn.lock" ]; then
+            corepack enable
+            yarn install --frozen-lockfile
+          elif [ -f "package-lock.json" ]; then
+            npm ci
+          else
+            npm install
+          fi
 
       - name: Build
+        working-directory: ${{ steps.detect.outputs.dir }}
         env:
           CI: "false"
           DISABLE_ESLINT_PLUGIN: "true"
           PUBLIC_URL: "./"
-        run: yarn build
+        run: |
+          if [ -f "yarn.lock" ]; then
+            yarn build
+          else
+            npm run build
+          fi
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -47,7 +73,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: frontend/build
+          path: ${{ steps.detect.outputs.dir }}/build
 
   deploy:
     needs: build
