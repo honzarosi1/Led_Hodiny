@@ -186,8 +186,17 @@ function RGBPicker({ value, onChange, testId }) {
 // ═════════════════════════════════════════════════════════════
 
 export default function App() {
-  const { isSupported, isConnected, isConnecting, deviceName, log, connect, disconnect, send } =
-    useBLE();
+  const {
+    isSupported,
+    isConnected,
+    isConnecting,
+    deviceName,
+    lastError,
+    log,
+    connect,
+    disconnect,
+    send,
+  } = useBLE();
 
   const [tab, setTab] = useState("power");
   const [customRGB, setCustomRGB] = useState({ r: 255, g: 45, b: 85 });
@@ -254,6 +263,11 @@ export default function App() {
         </header>
 
         {!isSupported ? <UnsupportedBanner /> : null}
+
+        {/* LIVE LOG STRIP - krátký stav poslední komunikace */}
+        {isConnected && (
+          <LiveStatus lastError={lastError} log={log} onOpenTerminal={() => setTab("terminal")} />
+        )}
 
         {/* TABS */}
         <nav
@@ -400,6 +414,42 @@ function UnsupportedBanner() {
         <b>Share → Add to Home Screen</b> pro ikonku na ploše.
       </p>
     </div>
+  );
+}
+
+function LiveStatus({ lastError, log, onOpenTerminal }) {
+  const lastTx = log.find((e) => e.direction === "tx");
+  const lastRx = log.find((e) => e.direction === "rx");
+  const hasError = !!lastError;
+  return (
+    <button
+      type="button"
+      data-testid="live-status"
+      onClick={onOpenTerminal}
+      className={`w-full mb-4 rounded-xl border text-left px-3 py-2 text-xs font-mono transition ${
+        hasError
+          ? "border-red-900/60 bg-red-950/40 text-red-200"
+          : "border-white/10 bg-black/40 text-neutral-400 hover:bg-black/60"
+      }`}
+    >
+      {hasError ? (
+        <div className="text-red-300">
+          <span className="font-semibold not-italic">CHYBA:</span> {lastError}
+          <div className="text-[10px] text-red-400/70 mt-1">Klepni → otevřít Terminál</div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-2">
+            <span className="text-[#ff2d55]">→ TX:</span>
+            <span className="truncate">{lastTx ? lastTx.text : "—"}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-emerald-400">← RX:</span>
+            <span className="truncate">{lastRx ? lastRx.text : "—"}</span>
+          </div>
+        </div>
+      )}
+    </button>
   );
 }
 
