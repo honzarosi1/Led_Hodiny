@@ -28,6 +28,7 @@ jobs:
           if [ -f "frontend/package.json" ]; then
             echo "dir=frontend" >> "$GITHUB_OUTPUT"
             echo "Found frontend/package.json"
+            ls -la frontend | head -30
           elif [ -f "package.json" ]; then
             echo "dir=." >> "$GITHUB_OUTPUT"
             echo "Found package.json in repo root"
@@ -42,17 +43,15 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Install dependencies
+      - name: Install dependencies (npm with legacy peer deps)
         working-directory: ${{ steps.detect.outputs.dir }}
         run: |
-          if [ -f "yarn.lock" ]; then
-            corepack enable
-            yarn install --frozen-lockfile
-          elif [ -f "package-lock.json" ]; then
-            npm ci
-          else
-            npm install
-          fi
+          echo "--- directory contents ---"
+          ls -la
+          echo "--- installing with npm --legacy-peer-deps ---"
+          npm install --legacy-peer-deps --no-audit --no-fund
+          echo "--- ensuring ajv is present (CRA5 fix) ---"
+          npm install --legacy-peer-deps --no-audit --no-fund ajv@^8 ajv-keywords@^5
 
       - name: Build
         working-directory: ${{ steps.detect.outputs.dir }}
@@ -60,12 +59,14 @@ jobs:
           CI: "false"
           DISABLE_ESLINT_PLUGIN: "true"
           PUBLIC_URL: "./"
+          GENERATE_SOURCEMAP: "false"
+        run: npm run build
+
+      - name: Show build output
+        working-directory: ${{ steps.detect.outputs.dir }}
         run: |
-          if [ -f "yarn.lock" ]; then
-            yarn build
-          else
-            npm run build
-          fi
+          echo "--- build directory ---"
+          ls -la build | head -20
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
