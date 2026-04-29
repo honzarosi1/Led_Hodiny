@@ -13,6 +13,7 @@ import {
   Terminal as TerminalIcon,
   Wand2,
   Zap,
+  CalendarClock,
 } from "lucide-react";
 
 const PRESET_COLORS = [
@@ -210,6 +211,12 @@ export default function App() {
   ]);
   const [manualDigits, setManualDigits] = useState(["0", "0", "0", "0"]);
   const [terminalInput, setTerminalInput] = useState("");
+  const [schedule, setSchedule] = useState({
+    enabled: true,
+    nightStart: "21:00",
+    sleepStart: "21:45",
+    wake: "06:30",
+  });
 
   const tabs = useMemo(
     () => [
@@ -219,6 +226,7 @@ export default function App() {
       { id: "digits", label: "Číslice", icon: Type },
       { id: "colon", label: "Dvojtečka", icon: Clock },
       { id: "night", label: "Noční", icon: Moon },
+      { id: "schedule", label: "Plán", icon: CalendarClock },
       { id: "manual", label: "Ruční", icon: Wand2 },
       { id: "terminal", label: "Terminál", icon: TerminalIcon },
     ],
@@ -335,6 +343,14 @@ export default function App() {
               disabled={!isConnected}
               nightRGB={nightRGB}
               setNightRGB={setNightRGB}
+            />
+          )}
+          {tab === "schedule" && (
+            <SchedulePanel
+              send={guardSend}
+              disabled={!isConnected}
+              schedule={schedule}
+              setSchedule={setSchedule}
             />
           )}
           {tab === "manual" && (
@@ -699,6 +715,132 @@ function NightPanel({ send, disabled, nightRGB, setNightRGB }) {
         >
           Nastavit noční barvu
         </GlowButton>
+      </SectionCard>
+    </>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════
+// SCHEDULE PANEL
+// ═════════════════════════════════════════════════════════════
+function SchedulePanel({ send, disabled, schedule, setSchedule }) {
+  const update = (key, val) => setSchedule({ ...schedule, [key]: val });
+
+  const sendAll = () => {
+    if (disabled) return;
+    const parse = (t) => t.split(":").map((n) => parseInt(n, 10) || 0);
+    const [nsH, nsM] = parse(schedule.nightStart);
+    const [ssH, ssM] = parse(schedule.sleepStart);
+    const [wH, wM] = parse(schedule.wake);
+    send(`NIGHTSTART,${nsH},${nsM}`);
+    setTimeout(() => send(`SLEEPSTART,${ssH},${ssM}`), 80);
+    setTimeout(() => send(`WAKE,${wH},${wM}`), 160);
+    setTimeout(() => send(schedule.enabled ? "SCHED ON" : "SCHED OFF"), 240);
+  };
+
+  const TimeRow = ({ label, hint, value, onChange, testId, color }) => (
+    <div className="rounded-xl border border-white/5 bg-black/40 p-3">
+      <div className="flex items-center gap-2 mb-1">
+        <span
+          className="h-2.5 w-2.5 rounded-full shrink-0"
+          style={{ background: color, boxShadow: `0 0 8px ${color}` }}
+        />
+        <span className="text-sm font-semibold">{label}</span>
+      </div>
+      <p className="text-[11px] text-neutral-500 mb-2 leading-relaxed">{hint}</p>
+      <input
+        type="time"
+        data-testid={testId}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full bg-neutral-900 border border-white/10 rounded-lg px-3 py-2.5 text-lg font-mono text-[#ff2d55] focus:border-[#ff2d55] focus:outline-none"
+      />
+    </div>
+  );
+
+  return (
+    <>
+      <SectionCard title="Automatický plán" icon={CalendarClock} testId="section-schedule">
+        <div className="rounded-xl border border-white/5 bg-black/40 p-3 mb-3 flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold">Plán aktivní</div>
+            <div className="text-[11px] text-neutral-500">
+              Pokud je vypnuto, hodiny se chovají normálně podle ručního ovládání.
+            </div>
+          </div>
+          <button
+            data-testid="schedule-enabled-toggle"
+            onClick={() => update("enabled", !schedule.enabled)}
+            className={`relative h-7 w-12 rounded-full border transition shrink-0 ${
+              schedule.enabled ? "bg-[#ff2d55] border-[#ff2d55]" : "bg-neutral-800 border-white/10"
+            }`}
+            aria-pressed={schedule.enabled}
+          >
+            <span
+              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+                schedule.enabled ? "translate-x-6" : "translate-x-0.5"
+              }`}
+            />
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          <TimeRow
+            label="🌙 Začátek nočního režimu"
+            hint="Hodiny se přepnou na červenou (jas dle okolního světla)."
+            value={schedule.nightStart}
+            onChange={(v) => update("nightStart", v)}
+            testId="schedule-night-start"
+            color="#ff3b30"
+          />
+          <TimeRow
+            label="🛌 Úplné vypnutí"
+            hint="Hodiny zhasnou úplně — žádné světlo."
+            value={schedule.sleepStart}
+            onChange={(v) => update("sleepStart", v)}
+            testId="schedule-sleep-start"
+            color="#0a0a0a"
+          />
+          <TimeRow
+            label="☀ Probuzení"
+            hint="Hodiny se ráno zapnou v denním režimu (tvoje barvy/efekty)."
+            value={schedule.wake}
+            onChange={(v) => update("wake", v)}
+            testId="schedule-wake"
+            color="#ff9500"
+          />
+        </div>
+
+        <GlowButton
+          testId="btn-schedule-save"
+          variant="primary"
+          className="w-full mt-4"
+          onClick={sendAll}
+          disabled={disabled}
+        >
+          Uložit plán do hodin
+        </GlowButton>
+      </SectionCard>
+
+      <SectionCard title="Jak to funguje" testId="section-schedule-help">
+        <div className="text-xs text-neutral-400 leading-relaxed space-y-2">
+          <p>
+            <span className="text-emerald-400">☀ Den</span> ({schedule.wake} →{" "}
+            {schedule.nightStart}): Tvoje vybraná barva a efekt, jas podle fotorezistoru.
+          </p>
+          <p>
+            <span className="text-red-400">🌙 Noční tlumená</span> ({schedule.nightStart} →{" "}
+            {schedule.sleepStart}): Hodiny svítí červeně, jas reaguje na tmu v místnosti.
+          </p>
+          <p>
+            <span className="text-neutral-500">🛌 Spánek</span> ({schedule.sleepStart} →{" "}
+            {schedule.wake}): LED úplně zhasnuty.
+          </p>
+          <p className="text-neutral-500 pt-2 border-t border-white/5">
+            Plán běží na ESP32 podle RTC modulu — funguje i když nemáš telefon připojený. Časy se
+            uloží do paměti hodin.
+          </p>
+        </div>
       </SectionCard>
     </>
   );
